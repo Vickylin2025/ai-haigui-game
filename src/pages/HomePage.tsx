@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { GameCard } from '../components/GameCard'
 import { stories } from '../data/stories'
 
@@ -6,13 +7,23 @@ export function HomePage() {
     <div className="min-h-dvh bg-slate-900 text-slate-100">
       <header className="border-b border-slate-800 bg-slate-950/30">
         <div className="mx-auto w-full max-w-6xl px-4 py-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-amber-400">
-            AI海龟汤
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-            你只需要提出<strong className="text-amber-300">是/否</strong>
-            问题，AI 主持人只会回答「是 / 否 / 无关」。在有限信息里抽丝剥茧，逼近那句被黑暗藏起来的真相。
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-amber-400">
+                AI海龟汤
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                你只需要提出<strong className="text-amber-300">是/否</strong>
+                问题，AI 主持人只会回答「是 / 否 / 无关」。在有限信息里抽丝剥茧，逼近那句被黑暗藏起来的真相。
+              </p>
+            </div>
+            <Link
+              to="/preview"
+              className="shrink-0 rounded-lg border border-slate-700 px-4 py-2 text-sm transition hover:bg-slate-800"
+            >
+              游戏介绍
+            </Link>
+          </div>
         </div>
       </header>
 

@@ -25,7 +25,7 @@ export function GamePage() {
   }, [story, startGame, endGame])
 
   const [messages, setMessages] = useState<IMessage[]>(() => [
-    { role: 'ai', content: '规则提示：我只会回答「是 / 否」。开始提问吧。' },
+    { role: 'ai', content: '规则提示：我只会回答「是 / 否 / 无关」。开始提问吧。' },
   ])
   const [isAiResponding, setIsAiResponding] = useState(false)
 
@@ -51,7 +51,10 @@ export function GamePage() {
           const lastIdx = next.length - 1
 
           // ✅ 完美兜底逻辑：正常=是/否，异常=无关+提示
-          const finalAnswer = answer;
+          let finalAnswer = answer;
+          if (isFallback) {
+            finalAnswer = `${answer} (AI可能未能理解您的提问，请尝试换种问法)`
+          }
 
           if (next[lastIdx]?.role === 'ai' && next[lastIdx]?.content === '思考中...') {
             next[lastIdx] = { role: 'ai', content: finalAnswer }
