@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useEffect } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom' // Added useNavigate
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { ChatBox } from '../components/ChatBox'
 import type { IMessage } from '../components/Message'
 import { stories } from '../data/stories'
@@ -8,24 +8,21 @@ import { useGame } from '../context/GameContext'
 
 export function GamePage() {
   const { id } = useParams()
-  const navigate = useNavigate(); // Initialize useNavigate
-  const { startGame, endGame } = useGame();
+  const navigate = useNavigate()
+  const { startGame, endGame } = useGame()
 
   const story = useMemo(() => stories.find((s) => s.id === id), [id])
 
   useEffect(() => {
     if (story) {
-      startGame();
+      startGame()
     } else {
-      // If story is not found, it's not a valid game, so end any potential game state
-      endGame();
-      // Optionally, navigate away if the story is invalid, though the current check handles this.
+      endGame()
     }
     return () => {
-      // Cleanup function: ensure game state is ended when component unmounts
-      endGame();
-    };
-  }, [story, startGame, endGame]); // Dependencies for useEffect
+      endGame()
+    }
+  }, [story, startGame, endGame])
 
   const [messages, setMessages] = useState<IMessage[]>(() => [
     { role: 'ai', content: '规则提示：我只会回答「是 / 否 / 无关」。开始提问吧。' },
@@ -52,9 +49,10 @@ export function GamePage() {
           if (prev.length === 0) return prev
           const next = prev.slice()
           const lastIdx = next.length - 1
-          const finalAnswer = isFallback
-            ? `${answer} (AI可能未能理解您的提问，请尝试换种问法)`
-            : answer
+
+          // ✅ 完美兜底逻辑：正常=是/否，异常=无关+提示
+          const finalAnswer = answer;
+
           if (next[lastIdx]?.role === 'ai' && next[lastIdx]?.content === '思考中...') {
             next[lastIdx] = { role: 'ai', content: finalAnswer }
             return next
@@ -76,7 +74,7 @@ export function GamePage() {
         setIsAiResponding(false)
       }
     },
-    [isAiResponding, story],
+    [isAiResponding, story]
   )
 
   if (!story) {
@@ -153,7 +151,7 @@ export function GamePage() {
                       msg.content !== '思考中...' &&
                       msg.content !== '规则提示：我只会回答「是 / 否 / 无关」。开始提问吧。'
                   )
-                  .map((msg) => ({ speaker: msg.role === 'player' ? '玩家' : 'AI', text: msg.content }));
+                  .map((msg) => ({ speaker: msg.role === 'player' ? '玩家' : 'AI', text: msg.content }))
 
                 navigate('/result', {
                   state: {
@@ -161,7 +159,7 @@ export function GamePage() {
                     soupBase: story.bottom,
                     dialogueHistory: dialogueHistory,
                   },
-                });
+                })
               }}
               className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-900"
             >
@@ -179,4 +177,3 @@ export function GamePage() {
     </div>
   )
 }
-
