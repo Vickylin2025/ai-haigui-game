@@ -69,6 +69,12 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
+    console.log('---------- AI Chat Request Details ----------');
+    console.log(`Player Question: "${question}"`);
+    console.log(`Story Title: "${story.title}"`);
+    console.log(`Story Bottom: "${story.bottom}"`);
+    console.log('-------------------------------------------');
+
     const messages = [
       { role: 'system', content: `${DEEPSEEK_SYSTEM_PROMPT || ''}\n\n当前故事的汤面是：${story.title}。\n故事的汤底是：${story.bottom}` },
       { role: 'user', content: question }
