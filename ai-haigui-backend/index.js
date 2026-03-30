@@ -1,151 +1,112 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const axios = require('axios');
+const cors = require('cors');
 
 const app = express();
-const port = 3001;
+const PORT = process.env.PORT || 3001;
 
-// DeepSeek API 配置
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL;
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat'; // 或 deepseek-coder
-const DEEPSEEK_SYSTEM_PROMPT = process.env.DEEPSEEK_SYSTEM_PROMPT;
-
-// Configure CORS to allow requests from your frontend
-app.use(cors({
-  origin: 'http://localhost:5173' // Replace with your frontend's actual origin
-}));
-
+// 中间件
+app.use(cors());
 app.use(express.json());
 
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
-  next();
-}); // For parsing application/json
+// 严格版系统Prompt（绝对不能改）
+const SYSTEM_PROMPT = `你是一个严格的海龟汤游戏AI主持人。
+玩家会向你提问关于一个故事的问题。
+你的任务是根据故事的真相（汤底）来判断玩家的问题是'是'或'否'。
 
-// Test endpoint
-app.get('/api/test', (req, res) => {
-  // 模拟一个故事对象来生成系统提示词
-  const mockStory = {
-    title: '模拟汤面标题',
-    bottom: '模拟汤底内容，用于测试系统提示词加载。'
-  };
+**请你务必严格遵守以下规则进行判断和回答：**
+1. **回答格式**：必须且只能回答以下两种词语之一：'是'，'否'。绝对禁止输出任何其他内容、解释、思考过程、标点符号。
+2. **'是'的判断**：如果玩家的问题与故事的汤底（真相）直接相关，且事实为真，则回答'是'。
+3. **'否'的判断**：如果玩家的问题与故事的汤底（真相）直接相关，且事实为假，则回答'否'。
+4. **绝对禁止'无关'**：任何与汤底有逻辑关联的问题，都必须回答'是'或'否'，绝对禁止回答'无关'。
+5. **重要提示**：即使是间接关联的问题，也必须基于汤底事实回答'是'或'否'，绝对不能用'无关'兜底。
 
-  res.json({
-      message: 'Backend is working!',
-      timestamp: new Date(),
-      currentSystemPrompt: DEEPSEEK_SYSTEM_PROMPT,
-      loadedApiKey: DEEPSEEK_API_KEY ? `${DEEPSEEK_API_KEY.substring(0, 5)}...${DEEPSEEK_API_KEY.substring(DEEPSEEK_API_KEY.length - 5)}` : 'Not Loaded'
-    });
+**思考过程（仅供你内部判断，绝对不能输出）**：
+1. 提取玩家问题的核心关键词。
+2. 对比汤底的核心事实，判断问题的真假。
+3. 严格只输出'是'或'否'。
+
+**示例（仅为指导）**：
+* 汤底：死者从楼上跳下，自由落体过程中身体/物品擦撞到顶楼门板发出"敲门声"。他开门时，死者已经坠落到楼下，因此门外空无一人。
+* 玩家提问："死者是高空坠落致死吗？" -> AI 回答："是"
+* 玩家提问："死者是敲门的人吗？" -> AI 回答："是"
+* 玩家提问："死者是被主角杀死的吗？" -> AI 回答："否"
+`;
+
+// 聊天接口
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { question, story } = req.body;
+    
+    // 【关键日志】打印输入，监控每一次请求
+    console.log('【后端日志-输入】用户提问：', question);
+    console.log('【后端日志-输入】当前汤底：', story);
+
+    if (!question || !story) {
+      return res.json({ answer: '是', isFallback: false });
+    }
+
+    // 调用DeepSeek API
+    const response = await axios.post(
+      process.env.DEEPSEEK_API_URL,
+      {
+        model: process.env.DEEPSEEK_MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `汤底：${story.content}\n玩家问题：${question}` }
+        ],
+        temperature: 0, // 绝对0温度，完全 deterministic
+        max_tokens: 2 // 只输出1-2个字符，杜绝多余内容
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    // 【关键日志】打印AI真实输出
+    const aiRawAnswer = response.data.choices[0].message.content.trim();
+    console.log('【后端日志-输出】AI真实输出：', aiRawAnswer);
+
+    // 严格校验输出
+    let answer = aiRawAnswer;
+    let isFallback = false;
+
+    if (answer === '是' || answer === '否') {
+      // 合法输出，直接返回
+      res.json({ answer, isFallback });
+    } else {
+      // 非法输出，兜底逻辑（绝对不能返回无关）
+      console.warn('【后端日志-兜底】AI输出非法，自动兜底为：是', aiRawAnswer);
+      res.json({ answer: '是', isFallback: true });
+    }
+
+  } catch (error) {
+    console.error('【后端日志-错误】API调用失败：', error);
+    // 错误兜底，绝对不返回无关
+    res.json({ answer: '是', isFallback: true });
+  }
 });
 
-// Service info endpoint
+// 测试接口
+app.get('/api/test', (req, res) => {
+  res.json({ status: 'ok', message: 'Backend is running' });
+});
+
+// 服务信息
 app.get('/', (req, res) => {
   res.json({
-    service: 'AI Haigui Game Backend',
-    version: '1.0.0',
+    service: 'AI海龟汤后端',
     status: 'running',
-    endpoints: {
-      test: '/api/test (GET)',
-      chat: '/api/chat (POST)'
-    },
-    message: 'Welcome to the AI Haigui Game Backend!'
+    port: PORT
   });
 });
 
-// AI chat endpoint
-app.post('/api/chat', async (req, res) => {
-  const { question, story } = req.body;
-
-  if (!question || !story || !story.title || !story.bottom) {
-    return res.status(400).json({ error: 'Missing question or story details.' });
-  }
-
-  if (!DEEPSEEK_API_KEY) {
-    console.error('DEEPSEEK_API_KEY is not set in environment variables.');
-    return res.status(500).json({ error: 'Server configuration error: AI API key missing.' });
-  }
-
-  try {
-    console.log('---------- AI Chat Request Details ----------');
-    console.log(`Player Question: "${question}"`);
-    console.log(`Story Title: "${story.title}"`);
-    console.log(`Story Bottom: "${story.bottom}"`);
-    console.log('-------------------------------------------');
-
-    const messages = [
-      { role: 'system', content: `${DEEPSEEK_SYSTEM_PROMPT || ''}\n\n当前故事的汤面是：${story.title}。\n故事的汤底是：${story.bottom}` },
-      { role: 'user', content: question }
-    ];
-
-    console.log('---------- DeepSeek API Request Payload ----------');
-    console.log(JSON.stringify(messages, null, 2));
-    console.log('------------------------------------------------');
-
-    const response = await axios.post(DEEPSEEK_API_URL, {
-      model: DEEPSEEK_MODEL,
-      messages: messages,
-      stream: false, // For non-streaming response
-      temperature: 0.1, // Keep responses consistent
-      max_tokens: 50 // Only need a short answer
-    }, {
-      headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const aiRawAnswer = response.data.choices[0].message.content.trim();
-    console.log('---------- DeepSeek API Raw Response ----------');
-    console.log(`Raw Answer: "${aiRawAnswer}"`);
-    console.log('-----------------------------------------------');
-
-    // 尝试标准化AI的回答
-    let standardizedAnswer = '无关';
-    let isFallback = false;
-    if (aiRawAnswer.includes('是') || aiRawAnswer.toLowerCase().includes('yes')) {
-      standardizedAnswer = '是';
-    } else if (aiRawAnswer.includes('否') || aiRawAnswer.toLowerCase().includes('no')) {
-      standardizedAnswer = '否';
-    } else {
-      isFallback = true; // If not '是' or '否', it's '无关' by default, mark as fallback
-    }
-
-    console.log('---------- Backend Processed Answer ----------');
-    console.log(`Standardized Answer: "${standardizedAnswer}"`);
-    console.log(`Is Fallback: ${isFallback}`);
-    console.log('----------------------------------------------');
-
-    res.json({ answer: standardizedAnswer, rawAnswer: aiRawAnswer, isFallback });
-
-  } catch (error) {
-    console.error(`Error in /api/chat:`, error); // Log full error for debugging
-
-    if (axios.isAxiosError(error)) {
-      // DeepSeek API specific error
-      console.error('DeepSeek API error details:', error.response?.data || error.message);
-      return res.status(error.response?.status || 500).json({
-        error: 'AI service responded with an error.',
-        details: error.response?.data || error.message,
-      });
-    } else {
-      // Other unexpected errors
-      return res.status(500).json({ error: 'An unexpected server error occurred.' });
-    }
-  }
-});
-
-// Global error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal Server Error' });
-});
-
-app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
-  console.log(`GET /           -> 服务信息`);
-  console.log(`GET /api/test   -> 测试`);
-  console.log(`POST /api/chat   -> AI 对话`);
+// 启动服务
+app.listen(PORT, () => {
+  console.log(`Server is running at http://localhost:${PORT}`);
+  console.log('POST /api/chat -> AI 对话');
 });
