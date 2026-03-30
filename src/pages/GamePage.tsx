@@ -25,7 +25,7 @@ export function GamePage() {
   }, [story, startGame, endGame])
 
   const [messages, setMessages] = useState<IMessage[]>(() => [
-    { role: 'ai', content: '规则提示：我只会回答「是 / 否 / 无关」。开始提问吧。' },
+    { role: 'ai', content: '规则提示：我只会回答「是 / 否」。开始提问吧。' },
   ])
   const [isAiResponding, setIsAiResponding] = useState(false)
 
@@ -149,7 +149,7 @@ export function GamePage() {
                   .filter(
                     (msg) =>
                       msg.content !== '思考中...' &&
-                      msg.content !== '规则提示：我只会回答「是 / 否 / 无关」。开始提问吧。'
+                      msg.content !== '规则提示：我只会回答「是 / 否」。开始提问吧。'
                   )
                   .map((msg) => ({ speaker: msg.role === 'player' ? '玩家' : 'AI', text: msg.content }))
 

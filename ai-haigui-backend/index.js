@@ -54,7 +54,7 @@ app.post('/api/chat', async (req, res) => {
         model: process.env.DEEPSEEK_MODEL,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `汤底：${story.content}\n玩家问题：${question}` }
+          { role: 'user', content: `汤底：${story.bottom}\n玩家问题：${question}` }
         ],
         temperature: 0, // 绝对0温度，完全 deterministic
         max_tokens: 2 // 只输出1-2个字符，杜绝多余内容
