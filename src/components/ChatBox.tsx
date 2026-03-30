@@ -1,6 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Message, type IMessage } from './Message'
 
+// ✅ 【第一步：粘在这里！】工具函数：彻底清理输入字符，统一格式
+function cleanUserInput(input: string): string {
+  if (!input) return '';
+  
+  return input
+    // 1. 全角转半角（解决输入法全角符号问题）
+    .replace(/[\uff01-\uff5e]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0))
+    // 2. 移除所有不可见控制字符（零宽空格、制表符、换行等）
+    .replace(/[\x00-\x1F\x7F-\x9F\u200B-\u200D\uFEFF]/g, '')
+    // 3. 连续空格/换行合并为单个空格
+    .replace(/\s+/g, ' ')
+    // 4. 首尾空格彻底清除
+    .trim()
+    // 5. 统一问号格式（把全角？转半角?）
+    .replace(/？/g, '?')
+}
+
 export interface ChatBoxProps {
   messages: IMessage[]
   onSend: (content: string) => void | Promise<void>
@@ -19,23 +36,24 @@ export function ChatBox({
   const listEndRef = useRef<HTMLDivElement | null>(null)
 
   const canSend = useMemo(() => {
-    if (disabled) return false
-    if (isSending) return false
-    return value.trim().length > 0
-  }, [disabled, isSending, value])
+  if (disabled) return false
+  if (isSending) return false
+  // ✅ 用清洗后的值判断，避免不可见字符/全角符号导致的误判
+  return cleanUserInput(value).length > 0
+}, [disabled, isSending, value])
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' })
   }, [messages.length])
 
   const send = async () => {
-    const content = value.trim()
-    if (!content || !canSend) return
+  // ✅ 关键：发送前用清洗函数处理，替代原来的trim()
+  const content = cleanUserInput(value)
+  if (!content || !canSend) return
 
-    try {
-      setIsSending(true)
-      await onSend(content)
-      setValue('')
+  try {
+    setIsSending(true)
+    await onSend(content)
     } finally {
       setIsSending(false)
     }
@@ -62,7 +80,7 @@ export function ChatBox({
         <div className="flex items-center gap-2">
           <input
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => setValue(cleanUserInput(e.target.value))}
             onKeyDown={(e) => {
               if (e.key !== 'Enter') return
               if (e.shiftKey) return
