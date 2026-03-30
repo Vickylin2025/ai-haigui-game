@@ -76,13 +76,13 @@ app.post('/api/chat', async (req, res) => {
     let answer = aiRawAnswer;
     let isFallback = false;
 
-    if (answer === '是' || answer === '否') {
+    if (answer === '是' || answer === '否' || answer === '无关') {
       // 合法输出，直接返回
       res.json({ answer, isFallback });
     } else {
-      // 非法输出，兜底逻辑（绝对不能返回无关）
-      console.warn('【后端日志-兜底】AI输出非法，自动兜底为：是', aiRawAnswer);
-      res.json({ answer: '是', isFallback: true });
+      // 非法输出，兜底逻辑 (默认改为无关)
+      console.warn('【后端日志-兜底】AI输出非法，自动兜底为：无关', aiRawAnswer);
+      res.json({ answer: '无关', isFallback: true });
     }
 
   } catch (error) {
