@@ -104,6 +104,11 @@ export const processPlayerQuestion = async (
     
     const aiPromise = aiService.getAnswer(storyId, question, history);
     const rawAnswer = await Promise.race([aiPromise, timeoutPromise]);
+
+    // 检查AI回答是否包含不理解的提示，如果包含，则返回默认兜底回答
+    if (typeof rawAnswer === 'string' && rawAnswer.includes('AI可能未能理解您的提问')) {
+      return DEFAULT_AI_ANSWER;
+    }
     
     // 标准化回答格式
     return VALID_ANSWER_TYPES.includes(rawAnswer) ? rawAnswer : DEFAULT_AI_ANSWER;
