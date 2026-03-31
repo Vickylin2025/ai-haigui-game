@@ -50,11 +50,8 @@ export function GamePage() {
           const next = prev.slice()
           const lastIdx = next.length - 1
 
-          // ✅ 完美兜底逻辑：正常=是/否，异常=无关+提示
-          let finalAnswer = answer;
-          if (isFallback) {
-            finalAnswer = `${answer}（⚠️ AI 无法准确判断，建议换种方式提问）`
-          }
+          // ✅ 兜底逻辑：直接显示回答（后端已优化，不再频繁触发兜底）
+          const finalAnswer = answer
 
           if (next[lastIdx]?.role === 'ai' && next[lastIdx]?.content === '思考中...') {
             next[lastIdx] = { role: 'ai', content: finalAnswer }

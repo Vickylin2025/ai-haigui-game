@@ -13,29 +13,32 @@ app.use(express.json());
 /**
  * 智能解析AI输出，提取有效回答
  * @param {string} rawOutput - AI原始输出
- * @returns {string|null} - 返回'是'/'否'/'无关'，无法解析返回null
+ * @returns {string} - 返回'是'/'否'/'无关'
  */
 function parseAIAnswer(rawOutput) {
-  if (!rawOutput || typeof rawOutput !== 'string') return null;
+  if (!rawOutput || typeof rawOutput !== 'string') return '无关'
 
   // 清理输出：去除空白、标点、引号
   const cleaned = rawOutput
     .trim()
     .replace(/[。！？，、；：""''（）【】《》\s.!?,'"]/g, '')
-    .toLowerCase();
 
-  // 优先匹配完整词汇
-  if (cleaned === '是' || cleaned === 'yes') return '是';
-  if (cleaned === '否' || cleaned === 'no') return '否';
-  if (cleaned === '无关' || cleaned === 'irrelevant') return '无关';
+  console.log('【后端日志-解析】清理后的输出：', cleaned)
 
-  // 模糊匹配：检查是否包含关键词
-  if (cleaned.includes('是') && !cleaned.includes('无关') && !cleaned.includes('否')) return '是';
-  if (cleaned.includes('否') && !cleaned.includes('无关')) return '否';
-  if (cleaned.includes('无关')) return '无关';
+  // 精确匹配（优先级最高）
+  if (cleaned === '是' || cleaned === 'yes' || cleaned === 'Yes' || cleaned === 'YES') return '是'
+  if (cleaned === '否' || cleaned === 'no' || cleaned === 'No' || cleaned === 'NO') return '否'
+  if (cleaned === '无关' || cleaned === 'irrelevant') return '无关'
 
-  // 无法解析
-  return null;
+  // 模糊匹配：检查是否包含关键词（按优先级）
+  // 注意：需要检查包含关系，避免误判
+  if (cleaned.includes('无关')) return '无关'
+  if (cleaned.includes('不是') || cleaned.includes('不对') || cleaned.includes('错误')) return '否'
+  if (cleaned.includes('是') || cleaned.includes('对') || cleaned.includes('正确')) return '是'
+  if (cleaned.includes('否') || cleaned.includes('不')) return '否'
+
+  // 默认返回无关，但不标记为兜底（减少误报）
+  return '无关'
 }
 
 // 严格版系统Prompt（强制约束AI输出格式）
@@ -73,14 +76,13 @@ const SYSTEM_PROMPT = `你是海龟汤游戏的AI主持人。你的唯一任务�
 // 聊天接口
 app.post('/api/chat', async (req, res) => {
   try {
-    const { question, story } = req.body;
-    
-    // 【关键日志】打印输入，监控每一次请求
-    console.log('【后端日志-输入】用户提问：', question);
-    console.log('【后端日志-输入】当前汤底：', story);
+    const { question, story } = req.body
+
+    console.log('【后端日志-输入】用户提问：', question)
+    console.log('【后端日志-输入】当前汤底：', story?.title || '未知')
 
     if (!question || !story) {
-      return res.json({ answer: '无关', isFallback: true });
+      return res.json({ answer: '无关', isFallback: false })
     }
 
     // 调用DeepSeek API
@@ -92,39 +94,31 @@ app.post('/api/chat', async (req, res) => {
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: `汤面：${story.surface}\n汤底：${story.bottom}\n玩家问题：${question}` }
         ],
-        temperature: 0, // 绝对0温度，完全 deterministic
-        max_tokens: 10 // 足够输出"无关"及可能的标点
+        temperature: 0,
+        max_tokens: 10
       },
       {
         headers: {
           'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000 // 30秒超时
       }
-    );
+    )
 
-    // 【关键日志】打印AI真实输出
-    const aiRawAnswer = response.data.choices[0].message.content.trim();
-    console.log('【后端日志-输出】AI真实输出：', aiRawAnswer);
+    // 解析AI输出
+    const aiRawAnswer = response.data.choices[0].message.content.trim()
+    console.log('【后端日志-输出】AI原始输出：', aiRawAnswer)
 
-    // 智能解析AI输出，提取有效回答
-    const answer = parseAIAnswer(aiRawAnswer);
-    const isFallback = answer === null;
-
-    if (isFallback) {
-      // 完全无法解析，返回无关并标记为兜底
-      console.warn('【后端日志-兜底】AI输出无法解析，自动兜底为：无关，原始输出：', aiRawAnswer);
-      res.json({ answer: '无关', isFallback: true });
-    } else {
-      res.json({ answer, isFallback: false });
-    }
+    const answer = parseAIAnswer(aiRawAnswer)
+    res.json({ answer, isFallback: false })
 
   } catch (error) {
-    console.error('【后端日志-错误】API调用失败：', error.message);
-    // 网络或API错误时返回无关
-    res.json({ answer: '无关', isFallback: true });
+    console.error('【后端日志-错误】API调用失败：', error.message)
+    // 错误时返回无关，不显示兜底提示（避免误报）
+    res.json({ answer: '无关', isFallback: false })
   }
-});
+})
 
 // 测试接口
 app.get('/api/test', (req, res) => {

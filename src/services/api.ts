@@ -1,9 +1,20 @@
 import axios from 'axios'
 import type { Story } from '../data/stories'
 
-// 绝对禁止默认无关，兜底为是
+// 默认回答
 const DEFAULT_AI_ANSWER = '无关'
-const BACKEND_API_URL = 'http://localhost:3001/api/chat'
+
+// 获取后端 API 地址
+// 优先级：环境变量 > 开发代理路径
+function getApiBaseUrl(): string {
+  // 生产环境：使用环境变量配置的后端地址
+  const envUrl = import.meta.env.VITE_API_BASE_URL
+  if (envUrl) {
+    return envUrl
+  }
+  // 开发环境：使用 Vite 代理，直接请求相对路径
+  return ''
+}
 
 /**
  * askAI(question, story) -> Promise<'是' | '否' | '无关'>
@@ -12,29 +23,32 @@ export async function askAI(question: string, story: Story): Promise<{ answer: s
   const q = question.trim()
   if (!q) return { answer: DEFAULT_AI_ANSWER, isFallback: false }
 
-  // 【关键日志】打印输入
-  console.log("【前端日志-输入】当前汤底完整内容：", story);
-  console.log("【前端日志-输入】用户提问：", q);
+  const baseUrl = getApiBaseUrl()
+  const apiUrl = `${baseUrl}/api/chat`
+
+  console.log("【前端日志】API请求地址：", apiUrl)
+  console.log("【前端日志-输入】用户提问：", q)
 
   try {
-    const response = await axios.post(BACKEND_API_URL, {
+    const response = await axios.post(apiUrl, {
       question: q,
       story: story,
-    });
+    }, {
+      timeout: 15000, // 15秒超时
+    })
 
-    // 【关键日志】打印后端完整响应
-    console.log("【前端日志-输出】后端完整响应：", response.data);
+    console.log("【前端日志-输出】后端响应：", response.data)
 
-    const { answer, isFallback } = response.data;
-    // 严格校验，只允许是/否/无关，兜底为无关
+    const { answer, isFallback } = response.data
+    // 严格校验，只允许是/否/无关
     if (typeof answer === 'string' && ['是', '否', '无关'].includes(answer)) {
-      return { answer, isFallback: isFallback || false };
+      return { answer, isFallback: isFallback || false }
     } else {
-      console.warn('Backend returned an unexpected answer format:', response.data);
-      return { answer: DEFAULT_AI_ANSWER, isFallback: true };
+      console.warn('【前端日志】后端返回格式异常：', response.data)
+      return { answer: DEFAULT_AI_ANSWER, isFallback: true }
     }
   } catch (error) {
-    console.error('Error calling backend AI API:', error);
-    return { answer: DEFAULT_AI_ANSWER, isFallback: true };
+    console.error('【前端日志】API调用失败：', error)
+    return { answer: DEFAULT_AI_ANSWER, isFallback: true }
   }
 }
