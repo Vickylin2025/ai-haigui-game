@@ -53,7 +53,7 @@ export function GamePage() {
           // ✅ 完美兜底逻辑：正常=是/否，异常=无关+提示
           let finalAnswer = answer;
           if (isFallback) {
-            finalAnswer = `${answer} (AI可能未能理解您的提问，请尝试换种问法)`
+            finalAnswer = `${answer}（⚠️ AI 无法准确判断，建议换种方式提问）`
           }
 
           if (next[lastIdx]?.role === 'ai' && next[lastIdx]?.content === '思考中...') {

@@ -10,30 +10,65 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// 严格版系统Prompt（绝对不能改）
-const SYSTEM_PROMPT = `你是一个严格的海龟汤游戏AI主持人。
-玩家会向你提问关于一个故事的问题。
-你的任务是根据故事的真相（汤底）来判断玩家的问题是'是'、'否'或'无关'。
+/**
+ * 智能解析AI输出，提取有效回答
+ * @param {string} rawOutput - AI原始输出
+ * @returns {string|null} - 返回'是'/'否'/'无关'，无法解析返回null
+ */
+function parseAIAnswer(rawOutput) {
+  if (!rawOutput || typeof rawOutput !== 'string') return null;
 
-**请你务必严格遵守以下规则进行判断和回答：**
-1. **回答格式**：必须且只能回答以下三种词语之一：'是'，'否'，'无关'。绝对禁止输出任何其他内容、解释、思考过程、标点符号。
-2. **'是'的判断**：如果玩家的问题与故事的汤底（真相）直接相关，且事实为真，则回答'是'。
-3. **'否'的判断**：如果玩家的问题与故事的汤底（真相）直接相关，且事实为假，则回答'否'。
-4. **'无关'的判断**：如果玩家的问题与故事的汤底（真相）没有直接或间接关联，或者无法根据汤底判断真伪，则回答'无关'。
-5. **重要提示**：请根据问题与汤底的关联性，准确判断并回答'是'、'否'或'无关'。
+  // 清理输出：去除空白、标点、引号
+  const cleaned = rawOutput
+    .trim()
+    .replace(/[。！？，、；：""''（）【】《》\s.!?,'"]/g, '')
+    .toLowerCase();
 
-**思考过程（仅供你内部判断，绝对不能输出）**：
-1. 提取玩家问题的核心关键词。
-2. 对比汤底的核心事实，判断问题的真假及关联性。
-3. 严格只输出'是'、'否'或'无关'。
+  // 优先匹配完整词汇
+  if (cleaned === '是' || cleaned === 'yes') return '是';
+  if (cleaned === '否' || cleaned === 'no') return '否';
+  if (cleaned === '无关' || cleaned === 'irrelevant') return '无关';
 
-**示例（仅为指导）**：
-* 汤底：死者从楼上跳下，自由落体过程中身体/物品擦撞到顶楼门板发出"敲门声"。他开门时，死者已经坠落到楼下，因此门外空无一人。
-* 玩家提问："死者是高空坠落致死吗？" -> AI 回答："是"
-* 玩家提问："死者是敲门的人吗？" -> AI 回答："是"
-* 玩家提问："死者是被主角杀死的吗？" -> AI 回答："否"
-* 玩家提问："今天天气怎么样？" -> AI 回答："无关"
-`;
+  // 模糊匹配：检查是否包含关键词
+  if (cleaned.includes('是') && !cleaned.includes('无关') && !cleaned.includes('否')) return '是';
+  if (cleaned.includes('否') && !cleaned.includes('无关')) return '否';
+  if (cleaned.includes('无关')) return '无关';
+
+  // 无法解析
+  return null;
+}
+
+// 严格版系统Prompt（强制约束AI输出格式）
+const SYSTEM_PROMPT = `你是海龟汤游戏的AI主持人。你的唯一任务是根据故事真相判断玩家问题，并给出回答。
+
+## 输出规则（绝对强制）
+你只能输出以下三个词之一，禁止输出任何其他内容：
+- 是
+- 否
+- 无关
+
+## 判断逻辑
+1. 如果问题所述事实与汤底一致 -> 回答"是"
+2. 如果问题所述事实与汤底矛盾 -> 回答"否"
+3. 如果问题与汤底无关或无法判断 -> 回答"无关"
+
+## 禁止事项
+- 禁止输出标点符号
+- 禁止输出解释或推理过程
+- 禁止输出多余字符
+- 禁止换行
+
+## 示例
+输入：汤底="小明吃了个毒苹果死了" 问题="小明是被毒死的吗？"
+输出：是
+
+输入：汤底="小明吃了个毒苹果死了" 问题="小明是被枪杀的吗？"
+输出：否
+
+输入：汤底="小明吃了个毒苹果死了" 问题="今天天气怎么样？"
+输出：无关
+
+现在开始判断，只输出一个词。`;
 
 // 聊天接口
 app.post('/api/chat', async (req, res) => {
@@ -58,7 +93,7 @@ app.post('/api/chat', async (req, res) => {
           { role: 'user', content: `汤面：${story.surface}\n汤底：${story.bottom}\n玩家问题：${question}` }
         ],
         temperature: 0, // 绝对0温度，完全 deterministic
-        max_tokens: 2 // 只输出1-2个字符，杜绝多余内容
+        max_tokens: 10 // 足够输出"无关"及可能的标点
       },
       {
         headers: {
@@ -72,23 +107,22 @@ app.post('/api/chat', async (req, res) => {
     const aiRawAnswer = response.data.choices[0].message.content.trim();
     console.log('【后端日志-输出】AI真实输出：', aiRawAnswer);
 
-    // 严格校验输出
-    let answer = aiRawAnswer;
-    let isFallback = false;
+    // 智能解析AI输出，提取有效回答
+    const answer = parseAIAnswer(aiRawAnswer);
+    const isFallback = answer === null;
 
-    if (answer === '是' || answer === '否' || answer === '无关') {
-      // 合法输出，直接返回
-      res.json({ answer, isFallback });
-    } else {
-      // 非法输出，兜底逻辑 (默认改为无关)
-      console.warn('【后端日志-兜底】AI输出非法，自动兜底为：无关', aiRawAnswer);
+    if (isFallback) {
+      // 完全无法解析，返回无关并标记为兜底
+      console.warn('【后端日志-兜底】AI输出无法解析，自动兜底为：无关，原始输出：', aiRawAnswer);
       res.json({ answer: '无关', isFallback: true });
+    } else {
+      res.json({ answer, isFallback: false });
     }
 
   } catch (error) {
-    console.error('【后端日志-错误】API调用失败：', error);
-    // 错误兜底，绝对不返回无关
-    res.json({ answer: '是', isFallback: true });
+    console.error('【后端日志-错误】API调用失败：', error.message);
+    // 网络或API错误时返回无关
+    res.json({ answer: '无关', isFallback: true });
   }
 });
 
