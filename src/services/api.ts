@@ -52,7 +52,7 @@ function getApiBaseUrl(): string {
 
 /**
  * askAI(question, story) -> Promise<'是' | '否' | '无关'>
- * 支持网络感知的重试机制
+ * 支持网络感知的重试机制，强制返回只能是「是/否/无关」
  */
 export async function askAI(question: string, story: Story): Promise<{ answer: string; isFallback: boolean }> {
   const q = question.trim()
@@ -81,15 +81,20 @@ export async function askAI(question: string, story: Story): Promise<{ answer: s
       console.log(`【前端日志-输出】第${attempt}次尝试成功：`, response.data)
 
       const { answer, isFallback } = response.data
-      // 严格校验，只允许是/否/无关
-      if (typeof answer === 'string' && ['是', '否', '无关'].includes(answer)) {
-        return { answer, isFallback: isFallback || false }
-      } else {
-        console.warn(`【前端日志】第${attempt}次尝试 - 后端返回格式异常：`, response.data)
 
-        // 响应格式异常，直接返回兜底答案（不重试，因为已收到响应）
-        return { answer: DEFAULT_AI_ANSWER, isFallback: true }
+      // 严格校验，只允许是/否/无关 - 修复返回逻辑
+      if (typeof answer === 'string') {
+        const normalizedAnswer = answer.trim()
+        if (['是', '否', '无关'].includes(normalizedAnswer)) {
+          return { answer: normalizedAnswer, isFallback: isFallback || false }
+        }
       }
+
+      console.warn(`【前端日志】第${attempt}次尝试 - 后端返回格式异常：`, response.data)
+      console.warn(`【前端日志】强制转换为默认答案：${DEFAULT_AI_ANSWER}`)
+
+      // 响应格式异常，直接返回兜底答案（不重试，因为已收到响应）
+      return { answer: DEFAULT_AI_ANSWER, isFallback: true }
     } catch (error) {
       const axiosError = error as AxiosError
 
