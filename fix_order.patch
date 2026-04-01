@@ -1,0 +1,37 @@
+--- a/ai-haigui-backend/index.js
++++ b/ai-haigui-backend/index.js
+@@ -235,12 +235,17 @@
+     }
+
+-    // 【二次校验：如果AI输出为"无关"但触发了关键词，强制改为"是/否"】
+-    const二次校验关键词 = ['手', '掌', '拍', '观众']
+-    const contains二次校验关键词 = 二次校验关键词.some(keyword => question.includes(keyword))
++    // 其他汤面关键词仍需AI判断（优先级最高）
++    const其他汤面关键词 = ['掌声', '报警', '演', '假', '录音', '鼓掌']
++    const contains其他汤面关键词 = 其他汤面关键词.some(keyword => question.includes(keyword))
++
++    // 如果问题涉及其他汤面关键词，强制要求AI必须回答"是"或"否"，绝不能回答"无关"
++    if (contains其他汤面关键词 && answer === '无关') {
++      // [重试逻辑保持不变...]
++    }
++
++    // 【二次校验：如果AI输出为"无关"但触发了关键词，强制改为"是/否"】
++    const二次校验关键词 = ['手', '掌', '拍', '观众']
++    const contains二次校验关键词 = 二次校验关键词.some(keyword => question.includes(keyword))
+
+-    // 其他汤面关键词仍需AI判断
+-    const其他汤面关键词 = ['掌声', '报警', '演', '假', '录音', '鼓掌']
+-    const contains其他汤面关键词 = 其他汤面关键词.some(keyword => question.includes(keyword))
++    // 只在AI输出为"无关"且未触发其他汤面关键词检查时才进行二次校验
++    if (contains二次校验关键词 && answer === '无关' && !contains其他汤面关键词) {
+       // [二次校验逻辑保持不变...]
+     }
+
+@@ -258,4 +263,4 @@
+     }
+
+-    // 如果问题涉及其他汤面关键词，强制要求AI必须回答"是"或"否"，绝不能回答"无关"
+-    if (contains其他汤面关键词 && answer === '无关') {
+-      // [重试逻辑重复，需要删除...]
+-    }
++    // 只返回 answer 字段给前端，thought 用于日志调试
