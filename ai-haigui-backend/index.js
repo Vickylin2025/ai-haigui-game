@@ -260,7 +260,7 @@ app.post('/api/chat', async (req, res) => {
     const contains其他汤面关键词 = 其他汤面关键词.some(keyword => question.includes(keyword))
 
     // 如果问题涉及其他汤面关键词，强制要求AI必须回答"是"或"否"，绝不能回答"无关"
-    if (contains其他汤面关键词) {
+    if (contains其他汤面关键词 && answer === '无关') {
       console.warn('【后端日志-拦截】检测到其他汤面关键词，强制要求AI必须回答"是"或"否"')
       console.warn('【后端日志-拦截】问题包含：', 其他汤面关键词.filter(k => question.includes(k)))
 
