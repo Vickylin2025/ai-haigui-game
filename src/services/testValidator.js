@@ -83,6 +83,82 @@ function validateTestStories() {
   console.log(`总通过率: ${((validCount / allStories.length) * 100).toFixed(1)}%`)
 }
 
+// 测试特定场景的判断逻辑
+function testJudgmentLogic() {
+  console.log('\n=== 测试判断逻辑 ===')
+
+  // 测试问题模板
+  const testQuestions = [
+    { question: '观众拍了吗？', keywords: ['观众', '拍'] },
+    { question: '观众拍的是手掌吗？', keywords: ['观众', '拍', '手掌'] },
+    { question: '观众有手吗？', keywords: ['观众', '手'] },
+    { question: '他们拍手了吗？', keywords: ['拍', '手'] },
+    { question: '观众在鼓掌吗？', keywords: ['观众', '鼓掌'] },
+    { question: '是观众拍的掌声吗？', keywords: ['观众', '拍', '掌声'] },
+    { question: '观众的手在动吗？', keywords: ['观众', '手'] }
+  ]
+
+  // 测试故事
+  const testStories = [
+    {
+      title: '测试1：观众没有手',
+      surface: '剧院里，观众席突然爆发出一片掌声。',
+      bottom: '观众没有手，没有拍任何东西，现场响的是预录掌声。'
+    },
+    {
+      title: '测试2：观众有手',
+      surface: '剧院里，观众席突然爆发出一片掌声。',
+      bottom: '观众确实有手，他们用双手鼓掌表示赞赏。'
+    },
+    {
+      title: '测试3：观众用假肢',
+      surface: '剧院里，观众席突然爆发出一片掌声。',
+      bottom: '观众有假肢，他们用假肢拍手。'
+    },
+    {
+      title: '测试4：观众拍桌子',
+      surface: '剧院里，观众席突然爆发出一片掌声。',
+      bottom: '观众没有手，他们在拍打座椅和扶手，制造出掌声的效果。'
+    }
+  ]
+
+  console.log('故事列表：')
+  testStories.forEach((story, index) => {
+    console.log(`${index + 1}. ${story.title}`)
+    console.log(`   汤面：${story.surface}`)
+    console.log(`   汤底：${story.bottom}`)
+  })
+
+  // 测试每个问题在各个故事下的预期答案
+  console.log('\n=== 测试结果矩阵 ===')
+  console.log('问题\\故事 | ' + testStories.map(s => s.title.substring(0, 8)).join(' | '))
+  console.log('---------|' + testStories.map(() => '--------').join('|'))
+
+  testQuestions.forEach((testQ, qIndex) => {
+    let row = `${testQ.question.substring(0, 8)} |`
+    testStories.forEach((story, sIndex) => {
+      // 根据汤底判断预期答案
+      let expectedAnswer = '无关'
+      if (story.bottom.includes('没有手') || story.bottom.includes('假肢') || story.bottom.includes('拍桌子') || story.bottom.includes('没有拍')) {
+        expectedAnswer = '否'
+      } else if (story.bottom.includes('手') || story.bottom.includes('手掌') || story.bottom.includes('鼓掌') || story.bottom.includes('拍手')) {
+        expectedAnswer = '是'
+      }
+
+      // 检查是否包含关键词
+      const hasKeywords = testQ.keywords.some(keyword => testQ.question.includes(keyword))
+
+      // 如果包含关键词但汤底没有相关信息，应该保持"无关"
+      if (hasKeywords && expectedAnswer === '无关') {
+        expectedAnswer = '❓ (关键但无信息)'
+      }
+
+      row += ` ${expectedAnswer}      |`
+    })
+    console.log(row)
+  })
+}
+
 // 验证单个故事
 function validateStory(story) {
   // 检查必需字段

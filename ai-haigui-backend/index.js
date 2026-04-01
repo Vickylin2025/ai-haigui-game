@@ -234,35 +234,24 @@ app.post('/api/chat', async (req, res) => {
       answer = parseAIAnswer(aiRawAnswer)
     }
 
-    // 【二次校验：如果AI输出为"无关"但触发了关键词，强制改为"否"】
-    const二次校验关键词 = ['手', '掌', '拍', '人', '观众']
+    // 【二次校验：如果AI输出为"无关"但触发了关键词，强制改为"是/否"】
+    const二次校验关键词 = ['手', '掌', '拍', '观众']
     const contains二次校验关键词 = 二次校验关键词.some(keyword => question.includes(keyword))
 
     if (contains二次校验关键词 && answer === '无关') {
-      console.warn('【后端日志-二次校验】检测到关键词但AI输出"无关"，强制改为"否"')
+      console.warn('【后端日志-二次校验】检测到关键词但AI输出"无关"，根据汤底内容判断')
       console.warn('【后端日志-二次校验】问题包含：', 二次校验关键词.filter(k => question.includes(k)))
-      answer = '否'
-    }
-
-    // 【硬编码拦截器：汤面关键词强制判断】
-    const强制否关键词 = ['手', '掌', '拍', '人', '观众']
-    const contains强制否关键词 = 强制否关键词.some(keyword => question.includes(keyword))
-
-    // 如果问题包含强制否关键词，根据汤底内容判断
-    if (contains强制否关键词) {
-      console.warn('【后端日志-拦截】检测到强制否关键词，根据汤底判断')
-      console.warn('【后端日志-拦截】问题包含：', 强制否关键词.filter(k => question.includes(k)))
 
       // 根据汤底内容判断是"是"还是"否"
-      if (story.bottom.includes('没有手') || story.bottom.includes('假肢') || story.bottom.includes('拍桌子')) {
-        console.warn('【后端日志-拦截】汤底说明观众没有手，判定为"否"')
+      if (story.bottom.includes('没有手') || story.bottom.includes('假肢') || story.bottom.includes('拍桌子') || story.bottom.includes('没有拍') || story.bottom.includes('预录')) {
+        console.warn('【后端日志-二次校验】汤底说明没有拍手，判定为"否"')
         answer = '否'
-      } else if (story.bottom.includes('手') || story.bottom.includes('手掌') || story.bottom.includes('鼓掌')) {
-        console.warn('【后端日志-拦截】汤底说明观众有手，判定为"是"')
+      } else if (story.bottom.includes('手') || story.bottom.includes('手掌') || story.bottom.includes('鼓掌') || story.bottom.includes('拍手')) {
+        console.warn('【后端日志-二次校验】汤底说明有手/鼓掌，判定为"是"')
         answer = '是'
       } else {
-        // 如果汤底没有明确说明，使用AI判断
-        console.warn('【后端日志-拦截】汤底未明确说明，使用AI判断')
+        // 如果汤底没有明确说明，保持"无关"（这是正确的，因为没有足够信息判断）
+        console.warn('【后端日志-二次校验】汤底未明确说明，保持"无关"')
       }
     }
 
@@ -276,16 +265,18 @@ app.post('/api/chat', async (req, res) => {
       console.warn('【后端日志-拦截】问题包含：', 其他汤面关键词.filter(k => question.includes(k)))
 
       // 强制让 AI 重新生成，并附加强提示
-      const retryPrompt = `警告：此问题涉及谜底核心。真相是：观众没有手（是猴子/假肢/在拍桌子），因此凡是提到'拍手掌'的问题，必须回答'否'，严禁回答'无关'。
+      const retryPrompt = `警告：此问题涉及汤面核心情节，绝对不能回答"无关"。
 
-你现在是海龟汤游戏的AI主持人，必须严格遵守以下规则：
+你是海龟汤游戏的AI主持人。必须严格遵守以下规则：
 1. 此问题涉及汤面核心情节（${其他汤面关键词.filter(k => question.includes(k)).join('、')}），绝对不能回答"无关"
 2. 必须根据汤底真相判断为"是"或"否"
 3. 严禁输出任何"无关"、"无法判断"、"不相关"等模糊回答
 4. 必须输出严格的JSON格式：{"thought": "简短推理过程", "answer": "是|否"}
-5. 如果汤底明确说明与问题无关，可以回答"否"，但绝不能回答"无关"
 
-现在开始判断：`
+汤面：${story.surface}
+汤底：${story.bottom}
+
+请根据汤面和汤底重新判断玩家问题"${question}"，必须输出"是"或"否"。`
 
       const retryResponse = await axios.post(
         process.env.DEEPSEEK_API_URL,
@@ -320,9 +311,21 @@ app.post('/api/chat', async (req, res) => {
           answer = parsed.answer
           console.log('【后端日志-重试成功】最终答案：', answer)
         } else if (parsed.answer === '无关') {
-          // 如果AI仍返回"无关"，强制改为"否"（有判断比无关强）
-          console.warn('【后端日志-拦截】AI仍坚持回答"无关"，强制改为"否"')
-          answer = '否'
+          // 如果AI仍返回"无关"，进行最终判断（根据汤底内容）
+          console.warn('【后端日志-拦截】AI仍坚持回答"无关"，根据汤底内容最终判断')
+
+          // 根据汤底内容判断是"是"还是"否"
+          if (story.bottom.includes('没有手') || story.bottom.includes('假肢') || story.bottom.includes('拍桌子') || story.bottom.includes('没有拍') || story.bottom.includes('预录') || story.bottom.includes('没有')) {
+            console.warn('【后端日志-拦截】汤底说明没有拍手，判定为"否"')
+            answer = '否'
+          } else if (story.bottom.includes('手') || story.bottom.includes('手掌') || story.bottom.includes('鼓掌') || story.bottom.includes('拍手') || story.bottom.includes('用')) {
+            console.warn('【后端日志-拦截】汤底说明有手/鼓掌，判定为"是"')
+            answer = '是'
+          } else {
+            // 如果汤底没有明确信息，使用AI的原始判断（可能是"无关"）
+            console.warn('【后端日志-拦截】汤底未明确说明，使用AI原始判断')
+            answer = '无关'
+          }
         } else {
           // 其他情况，使用字符串解析
           answer = parseAIAnswer(retryRawAnswer)
