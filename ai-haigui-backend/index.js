@@ -110,11 +110,11 @@ const SYSTEM_PROMPT = `你是海龟汤游戏的AI主持人。你的唯一任务�
 
 ### 示例 A：汤面关键词 - 反面事实
 汤面："表演结束后，观众爆发出热烈的掌声"
-汤底："观众没有手，没有拍任何东西，现场响的是预录掌声"
+汤底："观众没有手，是在拍桌子，现场响的是预录掌声"
 玩家问题："拍手的是人吗？"
 思考：
 1. 核心动作："拍手"
-2. 汤底事实：观众没有手
+2. 汤底事实：观众没有手，是在拍桌子
 3. 对比：汤底明确说明"没有手" ≠ "拍手"
 4. 结论：与汤底矛盾
 输出：{"thought":"汤底说明观众没有手，不可能拍手","answer":"否"}
@@ -233,17 +233,29 @@ app.post('/api/chat', async (req, res) => {
     }
 
     // 【硬编码拦截器：汤面关键词强制判断】
-    const汤面关键词 = ['掌声', '观众', '手', '报警', '演', '拍', '假', '录音', '鼓掌', '掌声', '观众', '手']
-    const contains汤面关键词 = 汤面关键词.some(keyword => question.includes(keyword))
+    const强制否关键词 = ['手', '掌', '拍']
+    const contains强制否关键词 = 强制否关键词.some(keyword => question.includes(keyword))
 
-    // 如果问题涉及汤面关键词，强制要求AI必须回答"是"或"否"，绝不能回答"无关"
-    if (contains汤面关键词) {
-      console.warn('【后端日志-拦截】检测到汤面关键词，强制要求AI必须回答"是"或"否"')
-      console.warn('【后端日志-拦截】问题包含：', 汤面关键词.filter(k => question.includes(k)))
+    // 如果问题包含强制否关键词，直接判定为"否"，无需AI判断
+    if (contains强制否关键词) {
+      console.warn('【后端日志-拦截】检测到强制否关键词，直接判定为"否"')
+      console.warn('【后端日志-拦截】问题包含：', 强制否关键词.filter(k => question.includes(k)))
+      answer = '否'
+      return
+    }
+
+    // 其他汤面关键词仍需AI判断
+    const其他汤面关键词 = ['掌声', '观众', '报警', '演', '假', '录音', '鼓掌']
+    const contains其他汤面关键词 = 其他汤面关键词.some(keyword => question.includes(keyword))
+
+    // 如果问题涉及其他汤面关键词，强制要求AI必须回答"是"或"否"，绝不能回答"无关"
+    if (contains其他汤面关键词) {
+      console.warn('【后端日志-拦截】检测到其他汤面关键词，强制要求AI必须回答"是"或"否"')
+      console.warn('【后端日志-拦截】问题包含：', 其他汤面关键词.filter(k => question.includes(k)))
 
       // 强制让 AI 重新生成，并附加强提示
       const retryPrompt = `你现在是海龟汤游戏的AI主持人，必须严格遵守以下规则：
-1. 此问题涉及汤面核心情节（${汤面关键词.filter(k => question.includes(k)).join('、')}），绝对不能回答"无关"
+1. 此问题涉及汤面核心情节（${其他汤面关键词.filter(k => question.includes(k)).join('、')}），绝对不能回答"无关"
 2. 必须根据汤底真相判断为"是"或"否"
 3. 严禁输出任何"无关"、"无法判断"、"不相关"等模糊回答
 4. 必须输出严格的JSON格式：{"thought": "简短推理过程", "answer": "是|否"}
