@@ -1,6 +1,6 @@
 import type { IStory } from './stories'
 
-export const testStories: IStory[] = [
+export const commonTestStories: IStory[] = [
   {
     id: 'test-audience-clap',
     title: '测试：观众拍手掌',
@@ -114,3 +114,4 @@ export const testStories: IStory[] = [
     bottom: '观众没有手，掌声是集体无意识行为，每个人都在模仿他人的动作。',
   }
 ]
+export const testStories = commonTestStories;
