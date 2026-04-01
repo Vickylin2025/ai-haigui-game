@@ -234,28 +234,7 @@ app.post('/api/chat', async (req, res) => {
       answer = parseAIAnswer(aiRawAnswer)
     }
 
-    // 【二次校验：如果AI输出为"无关"但触发了关键词，强制改为"是/否"】
-    const二次校验关键词 = ['手', '掌', '拍', '观众']
-    const contains二次校验关键词 = 二次校验关键词.some(keyword => question.includes(keyword))
-
-    if (contains二次校验关键词 && answer === '无关') {
-      console.warn('【后端日志-二次校验】检测到关键词但AI输出"无关"，根据汤底内容判断')
-      console.warn('【后端日志-二次校验】问题包含：', 二次校验关键词.filter(k => question.includes(k)))
-
-      // 根据汤底内容判断是"是"还是"否"
-      if (story.bottom.includes('没有手') || story.bottom.includes('假肢') || story.bottom.includes('拍桌子') || story.bottom.includes('没有拍') || story.bottom.includes('预录')) {
-        console.warn('【后端日志-二次校验】汤底说明没有拍手，判定为"否"')
-        answer = '否'
-      } else if (story.bottom.includes('手') || story.bottom.includes('手掌') || story.bottom.includes('鼓掌') || story.bottom.includes('拍手')) {
-        console.warn('【后端日志-二次校验】汤底说明有手/鼓掌，判定为"是"')
-        answer = '是'
-      } else {
-        // 如果汤底没有明确说明，保持"无关"（这是正确的，因为没有足够信息判断）
-        console.warn('【后端日志-二次校验】汤底未明确说明，保持"无关"')
-      }
-    }
-
-    // 其他汤面关键词仍需AI判断
+    // 其他汤面关键词仍需AI判断（优先级最高）
     const其他汤面关键词 = ['掌声', '报警', '演', '假', '录音', '鼓掌']
     const contains其他汤面关键词 = 其他汤面关键词.some(keyword => question.includes(keyword))
 
@@ -351,6 +330,28 @@ app.post('/api/chat', async (req, res) => {
           console.warn('【后端日志-拦截】汤底未明确说明，返回"无关"')
           answer = '无关'
         }
+      }
+    }
+
+    // 【二次校验：如果AI输出为"无关"但触发了关键词，强制改为"是/否"】
+    const二次校验关键词 = ['手', '掌', '拍', '观众']
+    const contains二次校验关键词 = 二次校验关键词.some(keyword => question.includes(keyword))
+
+    // 只在AI输出为"无关"且未触发其他汤面关键词检查时才进行二次校验
+    if (contains二次校验关键词 && answer === '无关' && !contains其他汤面关键词) {
+      console.warn('【后端日志-二次校验】检测到关键词但AI输出"无关"，根据汤底内容判断')
+      console.warn('【后端日志-二次校验】问题包含：', 二次校验关键词.filter(k => question.includes(k)))
+
+      // 根据汤底内容判断是"是"还是"否"
+      if (story.bottom.includes('没有手') || story.bottom.includes('假肢') || story.bottom.includes('拍桌子') || story.bottom.includes('没有拍') || story.bottom.includes('预录')) {
+        console.warn('【后端日志-二次校验】汤底说明没有拍手，判定为"否"')
+        answer = '否'
+      } else if (story.bottom.includes('手') || story.bottom.includes('手掌') || story.bottom.includes('鼓掌') || story.bottom.includes('拍手')) {
+        console.warn('【后端日志-二次校验】汤底说明有手/鼓掌，判定为"是"')
+        answer = '是'
+      } else {
+        // 如果汤底没有明确说明，保持"无关"（这是正确的，因为没有足够信息判断）
+        console.warn('【后端日志-二次校验】汤底未明确说明，保持"无关"')
       }
     }
 
