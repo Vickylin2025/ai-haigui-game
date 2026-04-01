@@ -1,9 +1,9 @@
-// 定义故事难度类型
+// 定义故事难度类型（严格限定，无多余类型）
 export type TDifficulty = 'easy' | 'medium' | 'hard'
 
-// 故事核心接口定义
+// 故事核心接口定义（id 仅为 string，和 GameCard.tsx 严格匹配）
 export interface IStory {
-  // 故事唯一标识
+  // 故事唯一标识（纯 string 类型，解决 TS2430 报错）
   id: string
   // 故事标题
   title: string
@@ -15,10 +15,10 @@ export interface IStory {
   bottom: string
 }
 
-// 故事类型别名（简化使用）
+// 故事类型别名（简化使用，非必须但保留）
 export type Story = IStory
 
-// 故事数据集
+// 完整的故事数据集（包含所有海龟汤故事，id 均为 string）
 export const stories: IStory[] = [
   {
     id: 'midnight-knock',
@@ -39,7 +39,7 @@ export const stories: IStory[] = [
     title: '无声的掌声',
     difficulty: 'medium',
     surface: '剧院里，观众席突然爆发出一片“掌声”。演员却脸色大变，立刻停演并报警。',
-    bottom: '观众没有手，没有拍任何东西，现场响的是预录掌声，用来掩盖某个更危险的声响（例如装置启动、金属摩擦）。演员听出”掌声”的节奏不对，意识到有人在制造混乱、配合犯罪，于是报警。'
+    bottom: '剧院正在上演默剧，全程不能发出声音，观众也必须安静。所谓的“掌声”其实是枪声，演员听出这不是掌声，立刻报警。'
   },
   {
     id: 'two-elevators',
