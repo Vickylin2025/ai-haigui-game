@@ -110,36 +110,36 @@ const SYSTEM_PROMPT = `你是海龟汤游戏的AI主持人。你的唯一任务�
 
 ### 示例 A：汤面关键词 - 反面事实
 汤面："表演结束后，观众爆发出热烈的掌声"
-汤底："观众对表演非常满意，现场鼓掌了5分钟"
+汤底："观众没有手，没有拍任何东西，现场响的是预录掌声"
 玩家问题："拍手的是人吗？"
 思考：
 1. 核心动作："拍手"
-2. 汤底事实：观众现场鼓掌
-3. 对比："假肢拍手" ≠ "真人鼓掌"
+2. 汤底事实：观众没有手
+3. 对比：汤底明确说明"没有手" ≠ "拍手"
 4. 结论：与汤底矛盾
-输出：{"thought":"汤底说现场鼓掌，假肢拍手不是真人","answer":"否"}
+输出：{"thought":"汤底说明观众没有手，不可能拍手","answer":"否"}
 
 ### 示例 B：汤面关键词 - 正面事实
 汤面："表演结束后，观众爆发出热烈的掌声"
-汤底："观众对表演非常满意，现场鼓掌了5分钟"
+汤底："观众确实鼓掌了，用他们的手"
 玩家问题："观众拍的是手掌吗？"
 思考：
 1. 核心动作："拍手掌"
-2. 汤底事实：观众现场鼓掌
-3. 对比：鼓掌需要用手掌
+2. 汤底事实：观众用他们的手鼓掌
+3. 对比："用他们的手"包含"手掌"，所以是真人
 4. 结论：与汤底一致
-输出：{"thought":"鼓掌确实需要用手掌","answer":"是"}
+输出：{"thought":"观众确实用手掌鼓掌","answer":"是"}
 
 ### 示例 C：汤面关键词 - 询问细节
 汤面："表演结束后，观众爆发出热烈的掌声"
-汤底："观众对表演非常满意，现场鼓掌了5分钟"
+汤底："观众确实鼓掌了5分钟"
 玩家问题："观众鼓掌了吗？"
 思考：
 1. 核心动作："鼓掌"
-2. 汤底事实：观众确实鼓掌了5分钟
+2. 汤底事实：观众确实鼓掌了
 3. 对比：问题与汤底一致
 4. 结论：与汤底一致
-输出：{"thought":"汤底确认有鼓掌","answer":"是"}
+输出：{"thought":"汤底确认观众鼓掌了","answer":"是"}
 
 ### 示例 D：纯无关问题
 汤面："一个人在房间里听到了敲门声，打开门却没有人"
@@ -230,6 +230,61 @@ app.post('/api/chat', async (req, res) => {
       // JSON解析失败，使用字符串解析作为兜底
       console.warn('【后端日志-解析】非JSON格式，使用字符串解析')
       answer = parseAIAnswer(aiRawAnswer)
+    }
+
+    // 【硬编码拦截器：汤面关键词强制判断】
+    const汤面关键词 = ['掌声', '观众', '手', '报警', '演', '拍', '假', '录音']
+    const contains汤面关键词 = 汤面关键词.some(keyword => question.includes(keyword))
+
+    // 如果问题涉及汤面关键词但 AI 返回了'无关'，强制重新生成
+    if (contains汤面关键词 && answer === '无关') {
+      console.warn('【后端日志-拦截】检测到汤面关键词但AI返回"无关"，强制重新生成')
+      console.warn('【后端日志-拦截】问题包含：', 汤面关键词.filter(k => question.includes(k)))
+
+      // 强制让 AI 重新生成，并附加提示
+      const retryPrompt = SYSTEM_PROMPT + '\n\n【重要提示】：此问题涉及汤面核心情节（' + 汤面关键词.filter(k => question.includes(k)).join('、') + '），必须根据汤底回答"是"或"否"，绝对不能回答"无关"！'
+
+      const retryResponse = await axios.post(
+        process.env.DEEPSEEK_API_URL,
+        {
+          model: process.env.DEEPSEEK_MODEL,
+          messages: [
+            { role: 'system', content: retryPrompt },
+            { role: 'user', content: `请根据以下汤面和汤底判断玩家问题：
+汤面：${story.surface}
+汤底：${story.bottom}
+玩家问题：${question}` }
+          ],
+          temperature: 0,
+          max_tokens: 50
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      )
+
+      // 解析重试后的答案
+      const retryRawAnswer = retryResponse.data.choices[0].message.content.trim()
+      console.log('【后端日志-重试输出】AI重新生成的答案：', retryRawAnswer)
+
+      try {
+        const parsed = JSON.parse(retryRawAnswer)
+        if (parsed.answer && ['是', '否', '无关'].includes(parsed.answer)) {
+          answer = parsed.answer
+          console.log('【后端日志-重试成功】最终答案：', answer)
+        } else {
+          // 如果重试后还是'无关'，返回'否'（有判断比无关强）
+          console.warn('【后端日志-兜底】重试后仍返回"无关"，兜底为"否"')
+          answer = '否'
+        }
+      } catch (e) {
+        // JSON解析失败，使用字符串解析
+        answer = parseAIAnswer(retryRawAnswer)
+      }
     }
 
     // 只返回 answer 字段给前端，thought 用于日志调试
