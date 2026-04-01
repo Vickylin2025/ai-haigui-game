@@ -248,12 +248,22 @@ app.post('/api/chat', async (req, res) => {
     const强制否关键词 = ['手', '掌', '拍', '人', '观众']
     const contains强制否关键词 = 强制否关键词.some(keyword => question.includes(keyword))
 
-    // 如果问题包含强制否关键词，直接判定为"否"，无需AI判断
+    // 如果问题包含强制否关键词，根据汤底内容判断
     if (contains强制否关键词) {
-      console.warn('【后端日志-拦截】检测到强制否关键词，直接判定为"否"')
+      console.warn('【后端日志-拦截】检测到强制否关键词，根据汤底判断')
       console.warn('【后端日志-拦截】问题包含：', 强制否关键词.filter(k => question.includes(k)))
-      answer = '否'
-      return
+
+      // 根据汤底内容判断是"是"还是"否"
+      if (story.bottom.includes('没有手') || story.bottom.includes('假肢') || story.bottom.includes('拍桌子')) {
+        console.warn('【后端日志-拦截】汤底说明观众没有手，判定为"否"')
+        answer = '否'
+      } else if (story.bottom.includes('手') || story.bottom.includes('手掌') || story.bottom.includes('鼓掌')) {
+        console.warn('【后端日志-拦截】汤底说明观众有手，判定为"是"')
+        answer = '是'
+      } else {
+        // 如果汤底没有明确说明，使用AI判断
+        console.warn('【后端日志-拦截】汤底未明确说明，使用AI判断')
+      }
     }
 
     // 其他汤面关键词仍需AI判断
