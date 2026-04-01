@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Message, type IMessage } from './Message'
 
-// ✅ 【第一步：粘在这里！】工具函数：彻底清理输入字符，统一格式
+// 工具函数：彻底清理输入字符，统一格式
 function cleanUserInput(input: string): string {
   if (!input) return '';
   
@@ -35,25 +35,30 @@ export function ChatBox({
   const [isSending, setIsSending] = useState(false)
   const listEndRef = useRef<HTMLDivElement | null>(null)
 
+  // 判断是否可以发送（基于清洗后的值）
   const canSend = useMemo(() => {
-  if (disabled) return false
-  if (isSending) return false
-  // ✅ 用清洗后的值判断，避免不可见字符/全角符号导致的误判
-  return cleanUserInput(value).length > 0
-}, [disabled, isSending, value])
+    if (disabled) return false
+    if (isSending) return false
+    return cleanUserInput(value).length > 0
+  }, [disabled, isSending, value])
 
+  // 消息列表自动滚动到底部
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' })
   }, [messages.length])
 
+  // 发送消息逻辑
   const send = async () => {
-  // ✅ 关键：发送前用清洗函数处理，替代原来的trim()
-  const content = cleanUserInput(value)
-  if (!content || !canSend) return
+    const content = cleanUserInput(value)
+    if (!content || !canSend) return
 
-  try {
-    setIsSending(true)
-    await onSend(content)
+    try {
+      setIsSending(true)
+      await onSend(content)
+      setValue('') // 发送成功后清空输入框
+    } catch (error) {
+      console.error('发送消息失败:', error)
+      // 可根据需求添加错误提示
     } finally {
       setIsSending(false)
     }
@@ -61,6 +66,7 @@ export function ChatBox({
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-lg border border-slate-800 bg-slate-950/20 shadow-lg">
+      {/* 消息列表区域 */}
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 1 && messages[0].content === '规则提示：我只会回答「是 / 否 / 无关」。开始提问吧。' ? (
           <div className="text-center text-slate-400 py-8">
@@ -76,6 +82,7 @@ export function ChatBox({
         <div ref={listEndRef} />
       </div>
 
+      {/* 输入框区域 */}
       <div className="border-t border-slate-800 bg-slate-950/60 p-3">
         <div className="flex items-center gap-2">
           <input
@@ -83,7 +90,7 @@ export function ChatBox({
             onChange={(e) => setValue(cleanUserInput(e.target.value))}
             onKeyDown={(e) => {
               if (e.key !== 'Enter') return
-              if (e.shiftKey) return
+              if (e.shiftKey) return // 允许shift+enter换行（如果需要）
               e.preventDefault()
               void send()
             }}
@@ -97,13 +104,12 @@ export function ChatBox({
             disabled={!canSend}
             className={`rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition-all duration-200 ease-in-out
               ${canSend ? 'hover:bg-amber-300 hover:scale-105 active:scale-95' : ''}
-              ${disabled || isSending ? 'cursor-not-allowed opacity-60' : ''}`}
+              ${!canSend ? 'cursor-not-allowed opacity-60' : ''}`}
           >
-            发送
+            {isSending ? '发送中...' : '发送'}
           </button>
         </div>
       </div>
     </div>
   )
 }
-

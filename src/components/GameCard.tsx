@@ -1,34 +1,65 @@
-import { Link } from 'react-router-dom'
-import type { IStory, TDifficulty } from '../data/stories'
+import { Link } from 'react-router-dom';
+import type { IStory, TDifficulty } from '../data/stories';
 
-export interface GameCardProps {
-  story: IStory
+// 定义难度类型（如果 stories.ts 中未导出，可在这里补充）
+export type TDifficulty = 'easy' | 'medium' | 'hard';
+
+// 定义故事数据接口（如果 stories.ts 中未导出，可在这里补充）
+export interface IStory {
+  id: string | number;
+  title: string;
+  difficulty: TDifficulty;
+  // 可扩展其他字段
+  description?: string;
+  coverImg?: string;
 }
 
+export interface GameCardProps {
+  story: IStory;
+}
+
+/**
+ * 获取难度对应的元信息（标签文本 + 样式类名）
+ * @param difficulty 难度等级
+ * @returns 难度元信息对象
+ */
 function getDifficultyMeta(difficulty: TDifficulty) {
   switch (difficulty) {
     case 'easy':
-      return { label: '简单', className: 'bg-emerald-500/15 text-emerald-200' }
+      return { label: '简单', className: 'bg-emerald-500/15 text-emerald-200' };
     case 'medium':
-      return { label: '中等', className: 'bg-amber-400/15 text-amber-300' }
+      return { label: '中等', className: 'bg-amber-400/15 text-amber-300' };
     case 'hard':
-      return { label: '困难', className: 'bg-rose-500/15 text-rose-200' }
+      return { label: '困难', className: 'bg-rose-500/15 text-rose-200' };
+    // 兜底处理（防止类型扩展后未覆盖的情况）
+    default:
+      return { label: '未知', className: 'bg-slate-500/15 text-slate-200' };
   }
 }
 
+/**
+ * 游戏卡片组件
+ * 展示单个故事的卡片，包含标题、难度标签，点击可跳转至游戏页面
+ * @param props 组件属性（包含单个故事数据）
+ * @returns 渲染后的游戏卡片
+ */
 export function GameCard({ story }: GameCardProps) {
-  const meta = getDifficultyMeta(story.difficulty)
+  const meta = getDifficultyMeta(story.difficulty);
 
   return (
     <Link
       to={`/game/${story.id}`}
       className="group block rounded-lg border border-slate-800 bg-slate-950/40 p-4 shadow-lg transition-all duration-300 ease-in-out hover:-translate-y-1 hover:scale-105 hover:border-slate-700 hover:bg-slate-950/60 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+      aria-label={`开始推理：${story.title}（难度：${meta.label}）`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate text-base font-semibold tracking-tight text-slate-100 group-hover:text-amber-200">
+        <div className="min-w-0 flex-1">
+          {/* 标题 */}
+          <h3 className="truncate text-base font-semibold tracking-tight text-slate-100 group-hover:text-amber-200">
             {story.title}
-          </div>
+          </h3>
+          
+          {/* 难度标签 + 提示文本 */}
           <div className="mt-2 flex items-center gap-2">
             <span
               className={[
@@ -40,13 +71,23 @@ export function GameCard({ story }: GameCardProps) {
             </span>
             <span className="text-xs text-slate-400">点击开始推理</span>
           </div>
+
+          {/* 可选：添加故事简介（如果有） */}
+          {story.description && (
+            <p className="mt-2 text-xs text-slate-500 line-clamp-2">
+              {story.description}
+            </p>
+          )}
         </div>
 
-        <span className="mt-0.5 shrink-0 text-amber-400/80 transition group-hover:text-amber-300">
+        {/* 箭头图标 */}
+        <span className="mt-0.5 shrink-0 text-amber-400/80 transition-all group-hover:text-amber-300 group-hover:translate-x-1">
           →
         </span>
       </div>
     </Link>
-  )
+  );
 }
 
+// 默认导出（方便导入使用）
+export default GameCard;
