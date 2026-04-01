@@ -233,16 +233,23 @@ app.post('/api/chat', async (req, res) => {
     }
 
     // 【硬编码拦截器：汤面关键词强制判断】
-    const汤面关键词 = ['掌声', '观众', '手', '报警', '演', '拍', '假', '录音']
+    const汤面关键词 = ['掌声', '观众', '手', '报警', '演', '拍', '假', '录音', '鼓掌', '掌声', '观众', '手']
     const contains汤面关键词 = 汤面关键词.some(keyword => question.includes(keyword))
 
-    // 如果问题涉及汤面关键词但 AI 返回了'无关'，强制重新生成
-    if (contains汤面关键词 && answer === '无关') {
-      console.warn('【后端日志-拦截】检测到汤面关键词但AI返回"无关"，强制重新生成')
+    // 如果问题涉及汤面关键词，强制要求AI必须回答"是"或"否"，绝不能回答"无关"
+    if (contains汤面关键词) {
+      console.warn('【后端日志-拦截】检测到汤面关键词，强制要求AI必须回答"是"或"否"')
       console.warn('【后端日志-拦截】问题包含：', 汤面关键词.filter(k => question.includes(k)))
 
-      // 强制让 AI 重新生成，并附加提示
-      const retryPrompt = SYSTEM_PROMPT + '\n\n【重要提示】：此问题涉及汤面核心情节（' + 汤面关键词.filter(k => question.includes(k)).join('、') + '），必须根据汤底回答"是"或"否"，绝对不能回答"无关"！'
+      // 强制让 AI 重新生成，并附加强提示
+      const retryPrompt = `你现在是海龟汤游戏的AI主持人，必须严格遵守以下规则：
+1. 此问题涉及汤面核心情节（${汤面关键词.filter(k => question.includes(k)).join('、')}），绝对不能回答"无关"
+2. 必须根据汤底真相判断为"是"或"否"
+3. 严禁输出任何"无关"、"无法判断"、"不相关"等模糊回答
+4. 必须输出严格的JSON格式：{"thought": "简短推理过程", "answer": "是|否"}
+5. 如果汤底明确说明与问题无关，可以回答"否"，但绝不能回答"无关"
+
+现在开始判断：`
 
       const retryResponse = await axios.post(
         process.env.DEEPSEEK_API_URL,
@@ -273,13 +280,16 @@ app.post('/api/chat', async (req, res) => {
 
       try {
         const parsed = JSON.parse(retryRawAnswer)
-        if (parsed.answer && ['是', '否', '无关'].includes(parsed.answer)) {
+        if (parsed.answer && ['是', '否'].includes(parsed.answer)) {
           answer = parsed.answer
           console.log('【后端日志-重试成功】最终答案：', answer)
-        } else {
-          // 如果重试后还是'无关'，返回'否'（有判断比无关强）
-          console.warn('【后端日志-兜底】重试后仍返回"无关"，兜底为"否"')
+        } else if (parsed.answer === '无关') {
+          // 如果AI仍返回"无关"，强制改为"否"（有判断比无关强）
+          console.warn('【后端日志-拦截】AI仍坚持回答"无关"，强制改为"否"')
           answer = '否'
+        } else {
+          // 其他情况，使用字符串解析
+          answer = parseAIAnswer(retryRawAnswer)
         }
       } catch (e) {
         // JSON解析失败，使用字符串解析
