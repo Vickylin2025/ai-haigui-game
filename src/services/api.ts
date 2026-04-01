@@ -87,13 +87,8 @@ export async function askAI(question: string, story: Story): Promise<{ answer: s
       } else {
         console.warn(`【前端日志】第${attempt}次尝试 - 后端返回格式异常：`, response.data)
 
-        // 如果不是网络问题导致的格式错误，直接返回失败
-        if (!isNetworkError(error)) {
-          return { answer: DEFAULT_AI_ANSWER, isFallback: true }
-        }
-
-        // 如果是网络问题，继续重试
-        throw new Error('Invalid response format')
+        // 响应格式异常，直接返回兜底答案（不重试，因为已收到响应）
+        return { answer: DEFAULT_AI_ANSWER, isFallback: true }
       }
     } catch (error) {
       const axiosError = error as AxiosError
