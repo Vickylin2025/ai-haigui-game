@@ -264,8 +264,9 @@ app.post('/api/chat', async (req, res) => {
       console.warn('【后端日志-拦截】检测到其他汤面关键词，强制要求AI必须回答"是"或"否"')
       console.warn('【后端日志-拦截】问题包含：', 其他汤面关键词.filter(k => question.includes(k)))
 
-      // 强制让 AI 重新生成，并附加强提示
-      const retryPrompt = `警告：此问题涉及汤面核心情节，绝对不能回答"无关"。
+      try {
+        // 强制让 AI 重新生成，并附加强提示
+        const retryPrompt = `警告：此问题涉及汤面核心情节，绝对不能回答"无关"。
 
 你是海龟汤游戏的AI主持人。必须严格遵守以下规则：
 1. 此问题涉及汤面核心情节（${其他汤面关键词.filter(k => question.includes(k)).join('、')}），绝对不能回答"无关"
@@ -278,61 +279,78 @@ app.post('/api/chat', async (req, res) => {
 
 请根据汤面和汤底重新判断玩家问题"${question}"，必须输出"是"或"否"。`
 
-      const retryResponse = await axios.post(
-        process.env.DEEPSEEK_API_URL,
-        {
-          model: process.env.DEEPSEEK_MODEL,
-          messages: [
-            { role: 'system', content: retryPrompt },
-            { role: 'user', content: `请根据以下汤面和汤底判断玩家问题：
+        const retryResponse = await axios.post(
+          process.env.DEEPSEEK_API_URL,
+          {
+            model: process.env.DEEPSEEK_MODEL,
+            messages: [
+              { role: 'system', content: retryPrompt },
+              { role: 'user', content: `请根据以下汤面和汤底判断玩家问题：
 汤面：${story.surface}
 汤底：${story.bottom}
 玩家问题：${question}` }
-          ],
-          temperature: 0,
-          max_tokens: 50
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-            'Content-Type': 'application/json'
+            ],
+            temperature: 0,
+            max_tokens: 50
           },
-          timeout: 30000
-        }
-      )
-
-      // 解析重试后的答案
-      const retryRawAnswer = retryResponse.data.choices[0].message.content.trim()
-      console.log('【后端日志-重试输出】AI重新生成的答案：', retryRawAnswer)
-
-      try {
-        const parsed = JSON.parse(retryRawAnswer)
-        if (parsed.answer && ['是', '否'].includes(parsed.answer)) {
-          answer = parsed.answer
-          console.log('【后端日志-重试成功】最终答案：', answer)
-        } else if (parsed.answer === '无关') {
-          // 如果AI仍返回"无关"，进行最终判断（根据汤底内容）
-          console.warn('【后端日志-拦截】AI仍坚持回答"无关"，根据汤底内容最终判断')
-
-          // 根据汤底内容判断是"是"还是"否"
-          if (story.bottom.includes('没有手') || story.bottom.includes('假肢') || story.bottom.includes('拍桌子') || story.bottom.includes('没有拍') || story.bottom.includes('预录') || story.bottom.includes('没有')) {
-            console.warn('【后端日志-拦截】汤底说明没有拍手，判定为"否"')
-            answer = '否'
-          } else if (story.bottom.includes('手') || story.bottom.includes('手掌') || story.bottom.includes('鼓掌') || story.bottom.includes('拍手') || story.bottom.includes('用')) {
-            console.warn('【后端日志-拦截】汤底说明有手/鼓掌，判定为"是"')
-            answer = '是'
-          } else {
-            // 如果汤底没有明确信息，使用AI的原始判断（可能是"无关"）
-            console.warn('【后端日志-拦截】汤底未明确说明，使用AI原始判断')
-            answer = '无关'
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 30000
           }
-        } else {
-          // 其他情况，使用字符串解析
+        )
+
+        // 解析重试后的答案
+        const retryRawAnswer = retryResponse.data.choices[0].message.content.trim()
+        console.log('【后端日志-重试输出】AI重新生成的答案：', retryRawAnswer)
+
+        try {
+          const parsed = JSON.parse(retryRawAnswer)
+          if (parsed.answer && ['是', '否'].includes(parsed.answer)) {
+            answer = parsed.answer
+            console.log('【后端日志-重试成功】最终答案：', answer)
+          } else if (parsed.answer === '无关') {
+            // 如果AI仍返回"无关"，进行最终判断（根据汤底内容）
+            console.warn('【后端日志-拦截】AI仍坚持回答"无关"，根据汤底内容最终判断')
+
+            // 根据汤底内容判断是"是"还是"否"
+            if (story.bottom.includes('没有手') || story.bottom.includes('假肢') || story.bottom.includes('拍桌子') || story.bottom.includes('没有拍') || story.bottom.includes('预录') || story.bottom.includes('没有')) {
+              console.warn('【后端日志-拦截】汤底说明没有拍手，判定为"否"')
+              answer = '否'
+            } else if (story.bottom.includes('手') || story.bottom.includes('手掌') || story.bottom.includes('鼓掌') || story.bottom.includes('拍手') || story.bottom.includes('用')) {
+              console.warn('【后端日志-拦截】汤底说明有手/鼓掌，判定为"是"')
+              answer = '是'
+            } else {
+              // 如果汤底没有明确信息，使用AI的原始判断（可能是"无关"）
+              console.warn('【后端日志-拦截】汤底未明确说明，使用AI原始判断')
+              answer = '无关'
+            }
+          } else {
+            // 其他情况，使用字符串解析
+            answer = parseAIAnswer(retryRawAnswer)
+          }
+        } catch (e) {
+          // JSON解析失败，使用字符串解析
           answer = parseAIAnswer(retryRawAnswer)
         }
-      } catch (e) {
-        // JSON解析失败，使用字符串解析
-        answer = parseAIAnswer(retryRawAnswer)
+      } catch (retryError) {
+        // 重试请求失败，进行最终判断（根据汤底内容）
+        console.error('【后端日志-拦截】重试请求失败，根据汤底内容最终判断：', retryError.message)
+
+        // 根据汤底内容判断是"是"还是"否"
+        if (story.bottom.includes('没有手') || story.bottom.includes('假肢') || story.bottom.includes('拍桌子') || story.bottom.includes('没有拍') || story.bottom.includes('预录') || story.bottom.includes('没有')) {
+          console.warn('【后端日志-拦截】汤底说明没有拍手，判定为"否"')
+          answer = '否'
+        } else if (story.bottom.includes('手') || story.bottom.includes('手掌') || story.bottom.includes('鼓掌') || story.bottom.includes('拍手') || story.bottom.includes('用')) {
+          console.warn('【后端日志-拦截】汤底说明有手/鼓掌，判定为"是"')
+          answer = '是'
+        } else {
+          // 如果汤底没有明确信息，返回"无关"
+          console.warn('【后端日志-拦截】汤底未明确说明，返回"无关"')
+          answer = '无关'
+        }
       }
     }
 
