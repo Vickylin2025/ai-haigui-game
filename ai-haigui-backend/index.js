@@ -65,7 +65,9 @@ function parseAIAnswer(rawOutput) {
 }
 
 // 严格版系统Prompt（强制约束AI输出格式）
-const SYSTEM_PROMPT = `你是海龟汤游戏的AI主持人。你的唯一任务是根据汤底真相判断玩家问题，并给出回答。
+const SYSTEM_PROMPT = `警告：此问题涉及谜底核心。真相是：观众没有手（是猴子/假肢/在拍桌子），因此凡是提到'拍手掌'的问题，必须回答'否'，严禁回答'无关'。
+
+你是海龟汤游戏的AI主持人。你的唯一任务是根据汤底真相判断玩家问题，并给出回答。
 
 ## 【强制关键词检测规则】
 
@@ -232,8 +234,18 @@ app.post('/api/chat', async (req, res) => {
       answer = parseAIAnswer(aiRawAnswer)
     }
 
+    // 【二次校验：如果AI输出为"无关"但触发了关键词，强制改为"否"】
+    const二次校验关键词 = ['手', '掌', '拍', '人', '观众']
+    const contains二次校验关键词 = 二次校验关键词.some(keyword => question.includes(keyword))
+
+    if (contains二次校验关键词 && answer === '无关') {
+      console.warn('【后端日志-二次校验】检测到关键词但AI输出"无关"，强制改为"否"')
+      console.warn('【后端日志-二次校验】问题包含：', 二次校验关键词.filter(k => question.includes(k)))
+      answer = '否'
+    }
+
     // 【硬编码拦截器：汤面关键词强制判断】
-    const强制否关键词 = ['手', '掌', '拍']
+    const强制否关键词 = ['手', '掌', '拍', '人', '观众']
     const contains强制否关键词 = 强制否关键词.some(keyword => question.includes(keyword))
 
     // 如果问题包含强制否关键词，直接判定为"否"，无需AI判断
@@ -245,7 +257,7 @@ app.post('/api/chat', async (req, res) => {
     }
 
     // 其他汤面关键词仍需AI判断
-    const其他汤面关键词 = ['掌声', '观众', '报警', '演', '假', '录音', '鼓掌']
+    const其他汤面关键词 = ['掌声', '报警', '演', '假', '录音', '鼓掌']
     const contains其他汤面关键词 = 其他汤面关键词.some(keyword => question.includes(keyword))
 
     // 如果问题涉及其他汤面关键词，强制要求AI必须回答"是"或"否"，绝不能回答"无关"
@@ -254,7 +266,9 @@ app.post('/api/chat', async (req, res) => {
       console.warn('【后端日志-拦截】问题包含：', 其他汤面关键词.filter(k => question.includes(k)))
 
       // 强制让 AI 重新生成，并附加强提示
-      const retryPrompt = `你现在是海龟汤游戏的AI主持人，必须严格遵守以下规则：
+      const retryPrompt = `警告：此问题涉及谜底核心。真相是：观众没有手（是猴子/假肢/在拍桌子），因此凡是提到'拍手掌'的问题，必须回答'否'，严禁回答'无关'。
+
+你现在是海龟汤游戏的AI主持人，必须严格遵守以下规则：
 1. 此问题涉及汤面核心情节（${其他汤面关键词.filter(k => question.includes(k)).join('、')}），绝对不能回答"无关"
 2. 必须根据汤底真相判断为"是"或"否"
 3. 严禁输出任何"无关"、"无法判断"、"不相关"等模糊回答
